@@ -1,0 +1,62 @@
+name: C++ CI with Google Test
+
+on: 
+  push:
+    branches:
+      - main  # Trigger on pushes to the 'main' branch
+  pull_request:
+    branches:
+      - main  # Trigger on pull requests to the 'main' branch
+
+jobs:
+  clickhere:
+    runs-on: ubuntu-latest  # You can change this to 'windows-latest' or 'macos-latest' if needed
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake ninja-build git
+
+      - name: Install Google Test
+        run: |
+          git clone https://github.com/google/googletest.git
+          cd googletest
+          mkdir build
+          cd build
+          cmake ..
+          make -j$(nproc)
+          sudo make install
+
+      - name: Build project
+        id: build_project
+        continue-on-error: true  # Continue even if the build fails
+        run: make  # This runs the Makefile in your repository
+
+      - name: Run tests
+        id: run_tests
+        continue-on-error: true  # Continue even if the tests fail
+        run: |
+          if [ -f ./lltest ]; then  # Check if the executable exists
+            # Run the tests and capture the output
+            TEST_OUTPUT=$(./lltest|| true)  # Ignore the exit code of the test executable
+            echo "$TEST_OUTPUT"  # Print the test output for debugging
+            # Count the number of passed tests using grep
+            PASSED_TESTS=$(echo "$TEST_OUTPUT" | grep -o '\[       OK \]' | wc -l)
+            TOTAL_TESTS=5  # Total number of tests
+            # Calculate the grade proportionally on a scale of 1 to 4
+            GRADE=$(echo "scale=4; 1 + ($PASSED_TESTS / $TOTAL_TESTS) * 3" | bc | awk '{printf "%.2f\n", $0}')
+            echo "grade=$GRADE" >> $GITHUB_OUTPUT
+            echo "Passed tests: $PASSED_TESTS out of $TOTAL_TESTS"
+            echo "Calculated grade: $GRADE"
+          else
+            echo "grade=1" >> $GITHUB_OUTPUT  # Executable not found, set grade to 1
+            echo "Executable not found. Grade set to 1."
+          fi
+
+      - name: Show grade
+        run: |
+          echo "Grade: ${{ steps.run_tests.outputs.grade || 1 }}" 
